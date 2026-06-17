@@ -42,6 +42,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 18px}
 .stat-lbl{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px}
 .stat-val{font-size:22px;font-weight:600;letter-spacing:-0.02em}
+.stat.overdue{background:#FEF2F1;border-color:#F5C4C1;cursor:pointer;transition:background .1s}
+.stat.overdue:hover{background:#FDEBE9}
+.stat.overdue .stat-lbl{color:#9B3A35}
+.stat.overdue .stat-val{color:#C0392B}
+.stat.overdue .stat-cta{font-size:11px;color:#C0392B;margin-top:4px;display:flex;align-items:center;gap:3px}
+/* Overdue panel */
+.overdue-panel{background:var(--surface);border:1.5px solid #F5C4C1;border-radius:var(--r-xl);margin-bottom:24px;overflow:hidden;display:none}
+.overdue-panel.open{display:block}
+.overdue-ph{background:#FEF2F1;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #F5C4C1}
+.overdue-ph-title{font-size:14px;font-weight:600;color:#C0392B;display:flex;align-items:center;gap:8px}
+.overdue-ph-meta{font-size:12px;color:#9B3A35}
+.overdue-body{padding:20px 22px}
+.ov-vendor{margin-bottom:18px}
+.ov-vendor:last-child{margin-bottom:0}
+.ov-vendor-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ov-badge{font-size:11px;font-weight:600;padding:2px 9px;border-radius:9999px}
+.ov-vendor-meta{font-size:11px;color:var(--text-3)}
+table.ov-t{width:100%;border-collapse:collapse;font-size:12px}
+table.ov-t th{text-align:left;color:var(--text-3);font-weight:500;padding:3px 8px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:0.03em}
+table.ov-t td{padding:4px 8px;border-bottom:1px solid var(--border)}
+table.ov-t tr:last-child td{border-bottom:none}
+.ov-t .tr{text-align:right;font-variant-numeric:tabular-nums}
+.ov-t .overdue-days{color:#C0392B;font-weight:500}
 
 /* Section */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:22px;margin-bottom:24px}
@@ -135,6 +158,15 @@ table.po-t tr:last-child td{border-bottom:none}
 <div class="page">
 
   <div class="stats-row" id="stats-row"></div>
+
+  <!-- Overdue panel -->
+  <div class="overdue-panel" id="overdue-panel">
+    <div class="overdue-ph">
+      <span class="overdue-ph-title"><i class="ti ti-alert-triangle"></i> Overdue purchase orders</span>
+      <span class="overdue-ph-meta" id="overdue-ph-meta"></span>
+    </div>
+    <div class="overdue-body" id="overdue-body"></div>
+  </div>
 
   <!-- Weekly chart -->
   <div class="card">
@@ -284,17 +316,91 @@ async function handleUpload(input){
 }
 
 // ── Overview stats ────────────────────────────────────────────────
+function getOverdueData(){
+  const todayKey=fmtDate(TODAY);
+  const result={}; // {vendor:[{po,qty,lines,date,daysOverdue}]}
+  Object.entries(byDate).forEach(([d,vendors])=>{
+    if(d>=todayKey)return;
+    const daysOver=Math.round((TODAY-new Date(d+'T00:00:00'))/(1000*60*60*24));
+    Object.entries(vendors).forEach(([v,pos])=>{
+      if(!result[v])result[v]=[];
+      pos.forEach(p=>result[v].push({...p,date:d,daysOver}));
+    });
+  });
+  return result;
+}
+
 function renderStats(){
   let totalQty=0,totalLines=0,totalPOs=new Set(),activeDays=0;
   Object.entries(byDate).forEach(([d,vendors])=>{
     activeDays++;
     Object.values(vendors).forEach(pos=>pos.forEach(p=>{totalQty+=p.qty;totalLines+=p.lines;totalPOs.add(p.po);}));
   });
+  const ov=getOverdueData();
+  let ovPOs=new Set(),ovLines=0,ovQty=0;
+  Object.values(ov).forEach(pos=>pos.forEach(p=>{ovPOs.add(p.po);ovLines+=p.lines;ovQty+=p.qty;}));
+  const hasOverdue=ovPOs.size>0;
+  const ovCard=hasOverdue
+    ? `<div class="stat overdue" onclick="toggleOverdue()" role="button" aria-expanded="false" id="overdue-stat">
+        <div class="stat-lbl">Overdue POs</div>
+        <div class="stat-val">${num(ovPOs.size)}</div>
+        <div class="stat-cta"><i class="ti ti-chevron-down" id="overdue-chevron"></i>${num(ovLines)} lines · ${num(ovQty)} units</div>
+      </div>`
+    : `<div class="stat"><div class="stat-lbl">Overdue POs</div><div class="stat-val" style="color:var(--text-3)">None</div></div>`;
   document.getElementById('stats-row').innerHTML=`
     <div class="stat"><div class="stat-lbl">Total units outstanding</div><div class="stat-val">${num(totalQty)}</div></div>
     <div class="stat"><div class="stat-lbl">Total PO lines</div><div class="stat-val">${num(totalLines)}</div></div>
     <div class="stat"><div class="stat-lbl">Open purchase orders</div><div class="stat-val">${num(totalPOs.size)}</div></div>
-    <div class="stat"><div class="stat-lbl">Active delivery dates</div><div class="stat-val">${num(activeDays)}</div></div>`;
+    ${ovCard}`;
+  overdueOpen=false;
+  const op=document.getElementById('overdue-panel');
+  if(op)op.classList.remove('open');
+}
+
+let overdueOpen=false;
+function toggleOverdue(){
+  overdueOpen=!overdueOpen;
+  const panel=document.getElementById('overdue-panel');
+  const chevron=document.getElementById('overdue-chevron');
+  const stat=document.getElementById('overdue-stat');
+  panel.classList.toggle('open',overdueOpen);
+  if(chevron)chevron.style.transform=overdueOpen?'rotate(180deg)':'';
+  if(stat)stat.setAttribute('aria-expanded',overdueOpen);
+  if(overdueOpen)renderOverduePanel();
+}
+
+function renderOverduePanel(){
+  const ov=getOverdueData();
+  let totalPOs=new Set(),totalLines=0,totalQty=0;
+  let blocks='';
+  Object.entries(ov).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([v,pos])=>{
+    const c=gvc(v);
+    const vQty=pos.reduce((a,p)=>a+p.qty,0);
+    const vLines=pos.reduce((a,p)=>a+p.lines,0);
+    const vPOs=new Set(pos.map(p=>p.po));
+    totalQty+=vQty;totalLines+=vLines;pos.forEach(p=>totalPOs.add(p.po));
+    // Sort by date ascending (oldest first)
+    const sorted=[...pos].sort((a,b)=>a.date.localeCompare(b.date));
+    const rows=sorted.map(p=>`<tr>
+      <td>${p.po}</td>
+      <td>${new Date(p.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
+      <td class="tr overdue-days">${p.daysOver}d overdue</td>
+      <td class="tr">${num(p.qty)}</td>
+      <td class="tr">${p.lines}</td>
+    </tr>`).join('');
+    blocks+=`<div class="ov-vendor">
+      <div class="ov-vendor-hdr">
+        <span class="ov-badge" style="background:${c.bg};color:${c.tx}">${v}</span>
+        <span class="ov-vendor-meta">${vPOs.size} PO${vPOs.size>1?'s':''} · ${num(vQty)} units · ${vLines} lines</span>
+      </div>
+      <table class="ov-t">
+        <thead><tr><th>PO number</th><th>Expected date</th><th style="text-align:right">Status</th><th style="text-align:right">Units</th><th style="text-align:right">Lines</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  });
+  document.getElementById('overdue-ph-meta').textContent=`${num(totalPOs.size)} POs · ${num(totalLines)} lines · ${num(totalQty)} units`;
+  document.getElementById('overdue-body').innerHTML=blocks||'<div style="color:var(--text-3);font-size:13px">No overdue POs</div>';
 }
 
 // ── Week chart ────────────────────────────────────────────────────
