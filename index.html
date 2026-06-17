@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Delivery Planner — Direct Soccer</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -180,9 +181,40 @@ table.res-t tr:hover td{background:var(--surface-2)}
   .nav-lbl{min-width:140px;font-size:12px}
   .res-summary{grid-template-columns:repeat(2,1fr)}
 }
+/* Auth overlay */
+#login-overlay{position:fixed;inset:0;background:#F1EFE8;display:flex;align-items:center;justify-content:center;z-index:9999}
+.login-box{background:#fff;border-radius:16px;padding:48px 40px;max-width:400px;width:calc(100% - 48px);text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.08);border:1px solid rgba(0,0,0,0.07)}
+.login-logo{width:52px;height:52px;background:#185FA5;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+.login-logo i{color:#fff;font-size:26px}
+.login-title{font-size:20px;font-weight:600;margin-bottom:6px;letter-spacing:-0.02em}
+.login-sub{font-size:13px;color:#9C9A96;margin-bottom:32px}
+.ms-btn{display:inline-flex;align-items:center;gap:12px;padding:11px 24px;border:1px solid rgba(0,0,0,0.15);border-radius:4px;background:#fff;cursor:pointer;font-size:14px;font-weight:600;color:#1A1A1A;font-family:inherit;width:100%;justify-content:center;transition:background .1s}
+.ms-btn:hover{background:#F7F5F1}
+.ms-btn:disabled{opacity:0.5;cursor:default}
+.login-note{font-size:11px;color:#9C9A96;margin-top:16px}
+.login-error{font-size:12px;color:#C0392B;margin-top:12px;display:none}
+.user-chip{display:flex;align-items:center;gap:7px;padding:4px 10px;border-radius:9999px;background:#F1EFE8;font-size:12px;color:#5A5957;white-space:nowrap}
 </style>
 </head>
 <body>
+
+<!-- Login overlay -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo"><i class="ti ti-package"></i></div>
+    <div class="login-title">Delivery Planner</div>
+    <div class="login-sub">Direct Soccer · Warehouse Operations</div>
+    <button class="ms-btn" onclick="signIn()" id="signin-btn">
+      <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/>
+        <rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      Sign in with Microsoft
+    </button>
+    <div class="login-error" id="login-error"></div>
+    <p class="login-note">Sign in with your Direct Soccer Microsoft account</p>
+  </div>
+</div>
 
 <header class="app-header">
   <div class="hd-left">
@@ -194,6 +226,12 @@ table.res-t tr:hover td{background:var(--surface-2)}
   </div>
   <div class="hd-right">
     <span class="last-upd" id="last-upd">Default data loaded</span>
+    <div class="user-chip" id="user-chip" style="display:none">
+      <i class="ti ti-user-circle"></i>
+      <span id="user-display"></span>
+      <span style="color:#C0C0BD;margin:0 2px">·</span>
+      <span onclick="signOut()" style="cursor:pointer;color:#185FA5;font-weight:500">Sign out</span>
+    </div>
     <label class="btn btn-primary" for="file-inp" style="cursor:pointer">
       <i class="ti ti-upload"></i> Upload Excel
     </label>
@@ -867,25 +905,77 @@ function refreshAll(){
   renderReservedView();
 }
 
-// ── Init ──────────────────────────────────────────────────────────
-loadFromRaw(DEFAULT_RAW);
-weekStart=getMonday(TODAY);
-calYear=TODAY.getFullYear();
-calMonth=TODAY.getMonth();
-// If today is past all data, jump to last data date
-const allDates=Object.keys(byDate).sort();
-if(allDates.length){
-  const lastDate=new Date(allDates[allDates.length-1]+'T00:00:00');
-  const firstDate=new Date(allDates[0]+'T00:00:00');
-  if(TODAY>lastDate){
-    calYear=lastDate.getFullYear();calMonth=lastDate.getMonth();
-    weekStart=getMonday(lastDate);
-  } else if(TODAY<firstDate){
-    calYear=firstDate.getFullYear();calMonth=firstDate.getMonth();
-    weekStart=getMonday(firstDate);
-  }
+// ── Auth ──────────────────────────────────────────────────────────
+const MSAL_CONFIG={
+  auth:{
+    clientId:'cec7a837-66c1-453e-bf65-e6c38d8ed9ac',
+    authority:'https://login.microsoftonline.com/ac11ba8b-4230-4c62-a1d9-af0c13002466',
+    redirectUri:window.location.origin+window.location.pathname,
+  },
+  cache:{cacheLocation:'sessionStorage',storeAuthStateInCookie:true}
+};
+const msalInstance=new msal.PublicClientApplication(MSAL_CONFIG);
+
+function signIn(){
+  const btn=document.getElementById('signin-btn');
+  btn.disabled=true;btn.textContent='Signing in…';
+  msalInstance.loginRedirect({scopes:['User.Read']}).catch(e=>{
+    btn.disabled=false;
+    btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Sign in with Microsoft`;
+    const err=document.getElementById('login-error');
+    err.style.display='block';err.textContent='Sign-in failed. Please try again.';
+  });
 }
-refreshAll();
+
+function signOut(){
+  msalInstance.logoutRedirect({postLogoutRedirectUri:window.location.href});
+}
+
+function showDashboard(account){
+  document.getElementById('login-overlay').style.display='none';
+  const chip=document.getElementById('user-chip');
+  chip.style.display='flex';
+  document.getElementById('user-display').textContent=account.name||account.username||'User';
+  initDashboard();
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+function initDashboard(){
+  loadFromRaw(DEFAULT_RAW);
+  weekStart=getMonday(TODAY);
+  calYear=TODAY.getFullYear();
+  calMonth=TODAY.getMonth();
+  const allDates=Object.keys(byDate).sort();
+  if(allDates.length){
+    const lastDate=new Date(allDates[allDates.length-1]+'T00:00:00');
+    const firstDate=new Date(allDates[0]+'T00:00:00');
+    if(TODAY>lastDate){
+      calYear=lastDate.getFullYear();calMonth=lastDate.getMonth();
+      weekStart=getMonday(lastDate);
+    } else if(TODAY<firstDate){
+      calYear=firstDate.getFullYear();calMonth=firstDate.getMonth();
+      weekStart=getMonday(firstDate);
+    }
+  }
+  refreshAll();
+}
+
+(async()=>{
+  try{
+    const resp=await msalInstance.handleRedirectPromise();
+    if(resp&&resp.account){
+      showDashboard(resp.account);
+    } else {
+      const accounts=msalInstance.getAllAccounts();
+      if(accounts.length>0){showDashboard(accounts[0]);}
+      else{/* login overlay already visible by default */}
+    }
+  } catch(e){
+    console.error('MSAL error:',e);
+    const err=document.getElementById('login-error');
+    if(err){err.style.display='block';err.textContent='Authentication error. Please refresh and try again.';}
+  }
+})();
 </script>
 </body>
 </html>
