@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Delivery Planner — Direct Soccer</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/dist/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -215,27 +214,9 @@ table.rp-rt input[type=number]:focus{outline:2px solid var(--accent);border-colo
   .nav-lbl{min-width:140px;font-size:12px}
   .res-summary{grid-template-columns:repeat(2,1fr)}
 }
-/* Auth overlay */
-#login-overlay{position:fixed;inset:0;background:#F1EFE8;display:flex;align-items:center;justify-content:center;z-index:9999}
-.login-box{background:#fff;border-radius:16px;padding:48px 40px;max-width:400px;width:calc(100% - 48px);text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.08);border:1px solid rgba(0,0,0,0.07)}
-.login-logo{width:52px;height:52px;background:#185FA5;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
-.login-logo i{color:#fff;font-size:26px}
-.login-title{font-size:20px;font-weight:600;margin-bottom:6px;letter-spacing:-0.02em}
-.login-sub{font-size:13px;color:#9C9A96;margin-bottom:32px}
-.ms-btn{display:inline-flex;align-items:center;gap:12px;padding:11px 24px;border:1px solid rgba(0,0,0,0.15);border-radius:4px;background:#fff;cursor:pointer;font-size:14px;font-weight:600;color:#1A1A1A;font-family:inherit;width:100%;justify-content:center;transition:background .1s}
-.ms-btn:hover{background:#F7F5F1}
-.ms-btn:disabled{opacity:0.5;cursor:default}
-.login-note{font-size:11px;color:#9C9A96;margin-top:16px}
-.login-error{font-size:12px;color:#C0392B;margin-top:12px;display:none}
-.user-chip{display:flex;align-items:center;gap:7px;padding:4px 10px;border-radius:9999px;background:#F1EFE8;font-size:12px;color:#5A5957;white-space:nowrap}
 </style>
 </head>
 <body>
-
-<!-- Login overlay -->
-<div id="login-overlay">
-  <div class="login-box">
-    <div class="login-logo"><i class="ti ti-package"></i></div>
     <div class="login-title">Delivery Planner</div>
     <div class="login-sub">Direct Soccer · Warehouse Operations</div>
     <button class="ms-btn" onclick="signIn()" id="signin-btn">
@@ -260,12 +241,6 @@ table.rp-rt input[type=number]:focus{outline:2px solid var(--accent);border-colo
   </div>
   <div class="hd-right">
     <span class="last-upd" id="last-upd">Default data loaded</span>
-    <div class="user-chip" id="user-chip" style="display:none">
-      <i class="ti ti-user-circle"></i>
-      <span id="user-display"></span>
-      <span style="color:#C0C0BD;margin:0 2px">·</span>
-      <span onclick="signOut()" style="cursor:pointer;color:#185FA5;font-weight:500">Sign out</span>
-    </div>
     <label class="btn btn-primary" for="file-inp" style="cursor:pointer">
       <i class="ti ti-upload"></i> Upload Excel
     </label>
@@ -1171,62 +1146,9 @@ function refreshAll(){
 }
 
 
-// ── Auth ──────────────────────────────────────────────────────────
-const MSAL_CONFIG={
-  auth:{
-    clientId:'cec7a837-66c1-453e-bf65-e6c38d8ed9ac',
-    authority:'https://login.microsoftonline.com/ac11ba8b-4230-4c62-a1d9-af0c13002466',
-    redirectUri:'https://rossc0m.github.io/directsoccer-outstanding-POs/',
-  },
-  cache:{cacheLocation:'sessionStorage',storeAuthStateInCookie:true}
-};
-const _msal=window.msalBrowser||window.msal;
-if(!_msal){
-  document.getElementById('login-error').style.display='block';
-  document.getElementById('login-error').textContent='Authentication library failed to load. Please check your internet connection and refresh.';
-  document.getElementById('signin-btn').disabled=true;
-}
-const msalInstance=_msal?new _msal.PublicClientApplication(MSAL_CONFIG):null;
-
-function signIn(){
-  if(!msalInstance)return;
-  const btn=document.getElementById('signin-btn');
-  const err=document.getElementById('login-error');
-  btn.disabled=true;
-  btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Signing in…`;
-  err.style.display='none';
-  msalInstance.loginPopup({scopes:['User.Read']})
-    .then(resp=>{
-      if(resp&&resp.account)showDashboard(resp.account);
-    })
-    .catch(e=>{
-      btn.disabled=false;
-      btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Sign in with Microsoft`;
-      err.style.display='block';
-      err.textContent=e.errorCode==='user_cancelled'?'Sign-in cancelled.':'Sign-in failed: '+e.message;
-    });
-}
-
-function signOut(){
-  if(!msalInstance)return;
-  msalInstance.logoutPopup().then(()=>{
-    document.getElementById('login-overlay').style.display='flex';
-    document.getElementById('user-chip').style.display='none';
-  }).catch(()=>msalInstance.logoutRedirect());
-}
-
-function showDashboard(account){
-  document.getElementById('login-overlay').style.display='none';
-  const chip=document.getElementById('user-chip');
-  chip.style.display='flex';
-  document.getElementById('user-display').textContent=account.name||account.username||'User';
-  initDashboard();
-}
-
 // ── Init ──────────────────────────────────────────────────────────
-function initDashboard(){
-  loadRpConfig();
-  loadFromRaw(DEFAULT_RAW);
+loadRpConfig();
+loadFromRaw(DEFAULT_RAW);
   weekStart=getMonday(TODAY);
   calYear=TODAY.getFullYear();
   calMonth=TODAY.getMonth();
@@ -1242,22 +1164,7 @@ function initDashboard(){
       weekStart=getMonday(firstDate);
     }
   }
-  refreshAll();
-}
-
-(async()=>{
-  if(!msalInstance)return;
-  try{
-    // No handleRedirectPromise needed for popup flow
-    const accounts=msalInstance.getAllAccounts();
-    if(accounts.length>0){showDashboard(accounts[0]);}
-    // else login overlay stays visible
-  } catch(e){
-    console.error('MSAL error:',e);
-    const err=document.getElementById('login-error');
-    if(err){err.style.display='block';err.textContent='Authentication error: '+e.message;}
-  }
-})();
+refreshAll();
 </script>
 </body>
 </html>
