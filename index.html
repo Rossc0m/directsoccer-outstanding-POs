@@ -1176,7 +1176,7 @@ const MSAL_CONFIG={
   auth:{
     clientId:'cec7a837-66c1-453e-bf65-e6c38d8ed9ac',
     authority:'https://login.microsoftonline.com/ac11ba8b-4230-4c62-a1d9-af0c13002466',
-    redirectUri:window.location.origin+window.location.pathname,
+    redirectUri:'https://rossc0m.github.io/directsoccer-outstanding-POs/',
   },
   cache:{cacheLocation:'sessionStorage',storeAuthStateInCookie:true}
 };
@@ -1191,25 +1191,28 @@ const msalInstance=_msal?new _msal.PublicClientApplication(MSAL_CONFIG):null;
 function signIn(){
   if(!msalInstance)return;
   const btn=document.getElementById('signin-btn');
+  const err=document.getElementById('login-error');
   btn.disabled=true;
   btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Signing in…`;
-  // Safety timeout — re-enable button if redirect hasn't fired after 8s
-  setTimeout(()=>{
-    btn.disabled=false;
-    btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Sign in with Microsoft`;
-  },8000);
-  msalInstance.loginRedirect({scopes:['User.Read']}).catch(e=>{
-    btn.disabled=false;
-    btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Sign in with Microsoft`;
-    const err=document.getElementById('login-error');
-    err.style.display='block';
-    err.textContent='Sign-in failed: '+e.message;
-  });
+  err.style.display='none';
+  msalInstance.loginPopup({scopes:['User.Read']})
+    .then(resp=>{
+      if(resp&&resp.account)showDashboard(resp.account);
+    })
+    .catch(e=>{
+      btn.disabled=false;
+      btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Sign in with Microsoft`;
+      err.style.display='block';
+      err.textContent=e.errorCode==='user_cancelled'?'Sign-in cancelled.':'Sign-in failed: '+e.message;
+    });
 }
 
 function signOut(){
   if(!msalInstance)return;
-  msalInstance.logoutRedirect({postLogoutRedirectUri:window.location.href});
+  msalInstance.logoutPopup().then(()=>{
+    document.getElementById('login-overlay').style.display='flex';
+    document.getElementById('user-chip').style.display='none';
+  }).catch(()=>msalInstance.logoutRedirect());
 }
 
 function showDashboard(account){
@@ -1245,14 +1248,10 @@ function initDashboard(){
 (async()=>{
   if(!msalInstance)return;
   try{
-    const resp=await msalInstance.handleRedirectPromise();
-    if(resp&&resp.account){
-      showDashboard(resp.account);
-    } else {
-      const accounts=msalInstance.getAllAccounts();
-      if(accounts.length>0){showDashboard(accounts[0]);}
-      else{/* login overlay already visible by default */}
-    }
+    // No handleRedirectPromise needed for popup flow
+    const accounts=msalInstance.getAllAccounts();
+    if(accounts.length>0){showDashboard(accounts[0]);}
+    // else login overlay stays visible
   } catch(e){
     console.error('MSAL error:',e);
     const err=document.getElementById('login-error');
