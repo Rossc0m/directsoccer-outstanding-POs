@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Delivery Planner — Direct Soccer</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/dist/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -173,7 +173,41 @@ table.res-t tr:hover td{background:var(--surface-2)}
 .s-future{font-size:11px;color:var(--text-2)}
 .so-ref{font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:var(--accent-bg);color:var(--accent);font-variant-numeric:tabular-nums}
 .desc-cell{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:768px){
+/* Resource planning */
+.rp-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;padding:14px 16px;background:var(--surface-2);border-radius:var(--r-lg);border:1px solid var(--border)}
+.rp-control{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2)}
+.rp-control label{font-size:11px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap}
+.rp-control input[type=number]{width:64px;padding:4px 8px;border:1px solid var(--border-2);border-radius:var(--r);font-size:13px;font-family:inherit;font-weight:500;text-align:center;background:var(--surface)}
+.rp-control input[type=number]:focus{outline:2px solid var(--accent);border-color:transparent}
+.rp-metric-toggle{display:flex;border:1px solid var(--border-2);border-radius:var(--r);overflow:hidden}
+.rp-metric-btn{padding:4px 12px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;font-family:inherit;color:var(--text-2);transition:background .1s}
+.rp-metric-btn.active{background:var(--accent);color:#fff}
+.rp-divider{width:1px;background:var(--border-2);height:28px;margin:0 4px}
+.rp-week-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px}
+.rp-week-table th{text-align:left;font-size:11px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px;border-bottom:2px solid var(--border)}
+.rp-week-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.rp-week-table tr:last-child td{border-bottom:none}
+.rp-week-table tr.no-delivery td{color:var(--text-3)}
+.rp-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+.rp-bar-cell{width:160px}
+.rp-bar-wrap{height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden}
+.rp-bar{height:100%;border-radius:4px;transition:width .3s}
+.rp-status{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:9999px}
+.rp-status.green{background:#EAF3DE;color:#27500A}
+.rp-status.amber{background:#FAEEDA;color:#633806}
+.rp-status.red{background:#FEF2F1;color:#C0392B}
+.rp-rates-toggle{font-size:12px;font-weight:500;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:4px;margin-bottom:12px;background:none;border:none;font-family:inherit;padding:0}
+.rp-rates-toggle:hover{text-decoration:underline}
+.rp-rates-panel{display:none;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-top:4px}
+.rp-rates-panel.open{display:block}
+table.rp-rt{width:100%;border-collapse:collapse;font-size:12px}
+table.rp-rt th{font-size:11px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.03em;padding:6px 12px;border-bottom:1px solid var(--border);text-align:left;background:var(--surface-2)}
+table.rp-rt td{padding:5px 12px;border-bottom:1px solid var(--border)}
+table.rp-rt tr:last-child td{border-bottom:none}
+table.rp-rt input[type=number]{width:72px;padding:3px 6px;border:1px solid var(--border-2);border-radius:var(--r);font-size:12px;font-family:inherit;text-align:center}
+table.rp-rt input[type=number]:focus{outline:2px solid var(--accent);border-color:transparent}
+.rp-save-note{font-size:11px;color:var(--text-3);margin-top:10px}
+.rp-vendors-in-day{display:flex;flex-wrap:wrap;gap:2px}
   .stats-row{grid-template-columns:repeat(2,1fr)}
   .page{padding:16px}
   .app-header{padding:0 16px}
@@ -307,6 +341,44 @@ table.res-t tr:hover td{background:var(--surface-2)}
       <button class="res-filter-btn f-special" id="rf-special" onclick="switchResFilter('special')">Special orders</button>
     </div>
     <div id="res-content"></div>
+  </div>
+
+  <!-- Resource planning -->
+  <div class="card" id="rp-card">
+    <div class="card-header" style="margin-bottom:14px">
+      <span class="card-title"><i class="ti ti-users" style="font-size:15px;vertical-align:-2px;margin-right:5px"></i>Resource planning</span>
+    </div>
+    <!-- Controls -->
+    <div class="rp-controls">
+      <div class="rp-control">
+        <label>Measure by</label>
+        <div class="rp-metric-toggle">
+          <button class="rp-metric-btn active" id="rp-m-lines" onclick="setRpMetric('lines')">Lines</button>
+          <button class="rp-metric-btn" id="rp-m-units" onclick="setRpMetric('units')">Units</button>
+        </div>
+      </div>
+      <div class="rp-divider"></div>
+      <div class="rp-control">
+        <label>Hours / shift</label>
+        <input type="number" id="rp-hours" value="7.5" min="1" max="24" step="0.5" onchange="saveRpConfig();renderResourcePlanning()">
+      </div>
+      <div class="rp-divider"></div>
+      <div class="rp-control">
+        <label>Heads available</label>
+        <input type="number" id="rp-heads" value="2" min="1" max="50" step="1" onchange="saveRpConfig();renderResourcePlanning()">
+      </div>
+    </div>
+    <!-- Week capacity table -->
+    <div id="rp-week-view"></div>
+    <!-- Vendor rates -->
+    <button class="rp-rates-toggle" onclick="toggleRpRates()">
+      <i class="ti ti-settings" style="font-size:13px"></i>
+      <span id="rp-rates-lbl">Configure vendor rates</span>
+    </button>
+    <div class="rp-rates-panel" id="rp-rates-panel">
+      <table class="rp-rt" id="rp-rates-table"></table>
+      <div class="rp-save-note" style="padding:8px 12px">Rates are saved automatically in your browser and persist between sessions.</div>
+    </div>
   </div>
 
 </div><!-- /page -->
@@ -635,8 +707,8 @@ function selectDayFromChart(k){
   document.getElementById('cal-card').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function changeWeek(dir){weekStart=addDays(weekStart,dir*7);renderWeekLabel();renderWeekChart();}
-function goWeekToday(){weekStart=getMonday(TODAY);renderWeekLabel();renderWeekChart();}
+function changeWeek(dir){weekStart=addDays(weekStart,dir*7);renderWeekLabel();renderWeekChart();renderResourcePlanning();}
+function goWeekToday(){weekStart=getMonday(TODAY);renderWeekLabel();renderWeekChart();renderResourcePlanning();}
 
 // ── Calendar ──────────────────────────────────────────────────────
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -895,6 +967,198 @@ function renderReservedView(){
   renderResContent();
 }
 
+// ── Resource planning ─────────────────────────────────────────────
+const RP_DEFAULT_LINES={
+  NIKE01:45,SPOR25:40,MIT50:35,JOM94:50,PUMA21:45,
+  REYD22:35,STAN03:40,KOOL57:30,TREN08:40,ADPA44:35,
+  ELEM50:40,UKST55:40,MTMK69:40,PRES06:40,MPSL25:40,
+  UNEE05:40,WMWA90:35,GUJRA1:35
+};
+const RP_DEFAULT_UNITS={
+  NIKE01:180,SPOR25:120,MIT50:500,JOM94:150,PUMA21:160,
+  REYD22:200,STAN03:180,KOOL57:300,TREN08:150,ADPA44:200,
+  ELEM50:150,UKST55:150,MTMK69:150,PRES06:150,MPSL25:150,
+  UNEE05:150,WMWA90:180,GUJRA1:200
+};
+const RP_DEFAULT_FALLBACK_LINES=40;
+const RP_DEFAULT_FALLBACK_UNITS=150;
+
+let rpMetric='lines';
+let rpRatesOpen=false;
+let rpRates={lines:{...RP_DEFAULT_LINES},units:{...RP_DEFAULT_UNITS}};
+
+function loadRpConfig(){
+  try{
+    const s=localStorage.getItem('ds_rp_config');
+    if(s){
+      const c=JSON.parse(s);
+      if(c.metric)rpMetric=c.metric;
+      if(c.rates)rpRates=c.rates;
+      if(c.hours)document.getElementById('rp-hours').value=c.hours;
+      if(c.heads)document.getElementById('rp-heads').value=c.heads;
+      document.getElementById('rp-m-lines').classList.toggle('active',rpMetric==='lines');
+      document.getElementById('rp-m-units').classList.toggle('active',rpMetric==='units');
+    }
+  }catch(e){}
+}
+
+function saveRpConfig(){
+  try{
+    localStorage.setItem('ds_rp_config',JSON.stringify({
+      metric:rpMetric,
+      rates:rpRates,
+      hours:document.getElementById('rp-hours').value,
+      heads:document.getElementById('rp-heads').value
+    }));
+  }catch(e){}
+}
+
+function setRpMetric(m){
+  rpMetric=m;
+  document.getElementById('rp-m-lines').classList.toggle('active',m==='lines');
+  document.getElementById('rp-m-units').classList.toggle('active',m==='units');
+  saveRpConfig();
+  renderResourcePlanning();
+}
+
+function getRpRate(vendor){
+  return rpMetric==='lines'
+    ?(rpRates.lines[vendor]||RP_DEFAULT_FALLBACK_LINES)
+    :(rpRates.units[vendor]||RP_DEFAULT_FALLBACK_UNITS);
+}
+
+function calcDayHours(dateKey){
+  const dayData=byDate[dateKey];
+  if(!dayData)return 0;
+  let totalHours=0;
+  Object.entries(dayData).forEach(([vendor,pos])=>{
+    const rate=getRpRate(vendor);
+    const vol=rpMetric==='lines'
+      ?pos.reduce((a,p)=>a+p.lines,0)
+      :pos.reduce((a,p)=>a+p.qty,0);
+    totalHours+=vol/rate;
+  });
+  return totalHours;
+}
+
+function toggleRpRates(){
+  rpRatesOpen=!rpRatesOpen;
+  document.getElementById('rp-rates-panel').classList.toggle('open',rpRatesOpen);
+  document.getElementById('rp-rates-lbl').textContent=rpRatesOpen?'Hide vendor rates':'Configure vendor rates';
+  if(rpRatesOpen)renderRpRatesTable();
+}
+
+function renderRpRatesTable(){
+  const vendors=Object.keys(byDate).length
+    ?[...new Set(Object.values(byDate).flatMap(v=>Object.keys(v)))].sort()
+    :Object.keys(RP_DEFAULT_LINES).sort();
+  const unit=rpMetric==='lines'?'lines/hr':'units/hr';
+  let html=`<thead><tr><th>Vendor</th><th>${unit}</th><th style="font-size:10px;color:var(--text-3)">Based on your historic data — adjust to match actual team performance</th></tr></thead><tbody>`;
+  vendors.forEach(v=>{
+    const c=gvc(v);
+    const rate=rpMetric==='lines'?(rpRates.lines[v]||RP_DEFAULT_FALLBACK_LINES):(rpRates.units[v]||RP_DEFAULT_FALLBACK_UNITS);
+    html+=`<tr>
+      <td><span class="rg-badge" style="background:${c.bg};color:${c.tx}">${v}</span></td>
+      <td><input type="number" value="${rate}" min="1" max="9999" step="1"
+        onchange="updateRpRate('${v}',this.value)"
+        oninput="updateRpRate('${v}',this.value)"></td>
+      <td style="font-size:11px;color:var(--text-3)">${rpMetric==='lines'?`${rate} lines per person per hour`:`${rate} units per person per hour`}</td>
+    </tr>`;
+  });
+  html+=`</tbody>`;
+  document.getElementById('rp-rates-table').innerHTML=html;
+}
+
+function updateRpRate(vendor,val){
+  const v=parseFloat(val);
+  if(!v||v<=0)return;
+  if(rpMetric==='lines'){rpRates.lines[vendor]=v;}
+  else{rpRates.units[vendor]=v;}
+  saveRpConfig();
+  renderResourcePlanning();
+}
+
+function renderResourcePlanning(){
+  const days=getWeekDates();
+  const keys=days.map(d=>fmtDate(d));
+  const hours=parseFloat(document.getElementById('rp-hours').value)||7.5;
+  const heads=parseInt(document.getElementById('rp-heads').value)||2;
+  const capacity=hours*heads;
+  const metricLabel=rpMetric==='lines'?'Lines':'Units';
+
+  // Find max hours for bar scaling
+  const dayHours=keys.map(k=>calcDayHours(k));
+  const maxH=Math.max(...dayHours,capacity,0.1);
+
+  let rows='';
+  keys.forEach((k,i)=>{
+    const d=days[i];
+    const dayData=byDate[k];
+    const h=dayHours[i];
+    const isToday=k===fmtDate(TODAY);
+    const dayLabel=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+
+    if(!dayData){
+      rows+=`<tr class="no-delivery"><td>${dayLabel}${isToday?' <span style="font-size:10px;color:var(--accent);font-weight:600">Today</span>':''}</td><td colspan="5" style="color:var(--text-3);font-size:12px">No deliveries</td></tr>`;
+      return;
+    }
+
+    // Volume per vendor
+    const vendors=Object.keys(dayData);
+    const vendorBadges=vendors.slice(0,4).map(v=>{const c=gvc(v);return`<span class="v-pill" style="background:${c.bg};color:${c.tx};font-size:10px;padding:1px 5px">${v}</span>`;}).join('')+(vendors.length>4?`<span style="font-size:10px;color:var(--text-3)">+${vendors.length-4}</span>`:'');
+    const totalVol=rpMetric==='lines'
+      ?Object.values(dayData).flat().reduce((a,p)=>a+p.lines,0)
+      :Object.values(dayData).flat().reduce((a,p)=>a+p.qty,0);
+
+    const headsNeeded=Math.ceil(h/hours);
+    const pct=Math.min((h/maxH)*100,100);
+    const utilPct=Math.min((h/capacity)*100,100);
+    const barCol=utilPct<=80?'#3B6D11':utilPct<=100?'#854F0B':'#C0392B';
+    let statusCls,statusTxt;
+    if(headsNeeded<=heads){statusCls='green';statusTxt=`${headsNeeded} of ${heads} heads`;}
+    else if(headsNeeded===heads+1){statusCls='amber';statusTxt=`Need ${headsNeeded} heads`;}
+    else{statusCls='red';statusTxt=`Need ${headsNeeded} heads`;}
+
+    rows+=`<tr style="${isToday?'background:var(--accent-bg)':''}">
+      <td style="font-weight:500">${dayLabel}${isToday?' <span style="font-size:10px;color:var(--accent);font-weight:600">Today</span>':''}</td>
+      <td><div class="rp-vendors-in-day">${vendorBadges}</div></td>
+      <td class="rp-num">${num(totalVol)}</td>
+      <td class="rp-num">${h.toFixed(1)}h</td>
+      <td class="rp-bar-cell">
+        <div class="rp-bar-wrap"><div class="rp-bar" style="width:${pct}%;background:${barCol}"></div></div>
+        <div style="font-size:10px;color:var(--text-3);margin-top:2px">${utilPct.toFixed(0)}% of shift capacity</div>
+      </td>
+      <td><span class="rp-status ${statusCls}">${statusTxt}</span></td>
+    </tr>`;
+  });
+
+  const weekTotal=dayHours.reduce((a,h)=>a+h,0);
+  const weekVol=keys.reduce((a,k)=>{
+    if(!byDate[k])return a;
+    return a+(rpMetric==='lines'
+      ?Object.values(byDate[k]).flat().reduce((s,p)=>s+p.lines,0)
+      :Object.values(byDate[k]).flat().reduce((s,p)=>s+p.qty,0));
+  },0);
+
+  document.getElementById('rp-week-view').innerHTML=`
+    <table class="rp-week-table">
+      <thead><tr>
+        <th>Day</th><th>Vendors due</th><th>${metricLabel}</th>
+        <th>Hours req.</th><th>Utilisation</th><th>Staffing</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:var(--surface-2)">
+        <td colspan="2" style="font-weight:600;font-size:12px;padding:8px 10px">Week total</td>
+        <td class="rp-num" style="font-weight:600">${num(weekVol)}</td>
+        <td class="rp-num" style="font-weight:600">${weekTotal.toFixed(1)}h</td>
+        <td colspan="2" style="font-size:11px;color:var(--text-3);padding:8px 10px">${(weekTotal/(capacity*5)*100).toFixed(0)}% of weekly capacity (${hours}h × ${heads} heads × 5 days)</td>
+      </tr></tfoot>
+    </table>`;
+
+  // Refresh rates table if open
+  if(rpRatesOpen)renderRpRatesTable();
+}
+
 // ── Full refresh ──────────────────────────────────────────────────
 function refreshAll(){
   renderStats();
@@ -903,7 +1167,9 @@ function refreshAll(){
   renderCalendar();
   resOpenGroups=new Set();
   renderReservedView();
+  renderResourcePlanning();
 }
+
 
 // ── Auth ──────────────────────────────────────────────────────────
 const MSAL_CONFIG={
@@ -914,20 +1180,35 @@ const MSAL_CONFIG={
   },
   cache:{cacheLocation:'sessionStorage',storeAuthStateInCookie:true}
 };
-const msalInstance=new msal.PublicClientApplication(MSAL_CONFIG);
+const _msal=window.msalBrowser||window.msal;
+if(!_msal){
+  document.getElementById('login-error').style.display='block';
+  document.getElementById('login-error').textContent='Authentication library failed to load. Please check your internet connection and refresh.';
+  document.getElementById('signin-btn').disabled=true;
+}
+const msalInstance=_msal?new _msal.PublicClientApplication(MSAL_CONFIG):null;
 
 function signIn(){
+  if(!msalInstance)return;
   const btn=document.getElementById('signin-btn');
-  btn.disabled=true;btn.textContent='Signing in…';
+  btn.disabled=true;
+  btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Signing in…`;
+  // Safety timeout — re-enable button if redirect hasn't fired after 8s
+  setTimeout(()=>{
+    btn.disabled=false;
+    btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Sign in with Microsoft`;
+  },8000);
   msalInstance.loginRedirect({scopes:['User.Read']}).catch(e=>{
     btn.disabled=false;
     btn.innerHTML=`<svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#00a4ef"/><rect x="1" y="11" width="9" height="9" fill="#7fba00"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> Sign in with Microsoft`;
     const err=document.getElementById('login-error');
-    err.style.display='block';err.textContent='Sign-in failed. Please try again.';
+    err.style.display='block';
+    err.textContent='Sign-in failed: '+e.message;
   });
 }
 
 function signOut(){
+  if(!msalInstance)return;
   msalInstance.logoutRedirect({postLogoutRedirectUri:window.location.href});
 }
 
@@ -941,6 +1222,7 @@ function showDashboard(account){
 
 // ── Init ──────────────────────────────────────────────────────────
 function initDashboard(){
+  loadRpConfig();
   loadFromRaw(DEFAULT_RAW);
   weekStart=getMonday(TODAY);
   calYear=TODAY.getFullYear();
@@ -961,6 +1243,7 @@ function initDashboard(){
 }
 
 (async()=>{
+  if(!msalInstance)return;
   try{
     const resp=await msalInstance.handleRedirectPromise();
     if(resp&&resp.account){
@@ -973,7 +1256,7 @@ function initDashboard(){
   } catch(e){
     console.error('MSAL error:',e);
     const err=document.getElementById('login-error');
-    if(err){err.style.display='block';err.textContent='Authentication error. Please refresh and try again.';}
+    if(err){err.style.display='block';err.textContent='Authentication error: '+e.message;}
   }
 })();
 </script>
