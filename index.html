@@ -270,7 +270,13 @@ table.rp-rt input[type=number]:focus{outline:2px solid var(--accent);border-colo
   <div class="overdue-panel" id="overdue-panel">
     <div class="overdue-ph">
       <span class="overdue-ph-title"><i class="ti ti-alert-triangle"></i> Overdue purchase orders</span>
-      <span class="overdue-ph-meta" id="overdue-ph-meta"></span>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9B3A35;cursor:pointer;user-select:none">
+          <input type="checkbox" id="exclude-placeholder" onchange="renderOverduePanel()" style="accent-color:#C0392B;width:14px;height:14px">
+          Exclude 26/12/2026 placeholder dates
+        </label>
+        <span class="overdue-ph-meta" id="overdue-ph-meta"></span>
+      </div>
     </div>
     <div class="overdue-body" id="overdue-body"></div>
   </div>
@@ -687,17 +693,19 @@ function toggleOverdue(){
 }
 
 function renderOverduePanel(){
+  const excludePlaceholder=document.getElementById('exclude-placeholder')?.checked;
   const ov=getOverdueData();
   let totalPOs=new Set(),totalLines=0,totalQty=0;
   let blocks='';
   Object.entries(ov).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([v,pos])=>{
+    const filtered=excludePlaceholder?pos.filter(p=>p.date!=='2026-12-26'):pos;
+    if(!filtered.length)return;
     const c=gvc(v);
-    const vQty=pos.reduce((a,p)=>a+p.qty,0);
-    const vLines=pos.reduce((a,p)=>a+p.lines,0);
-    const vPOs=new Set(pos.map(p=>p.po));
-    totalQty+=vQty;totalLines+=vLines;pos.forEach(p=>totalPOs.add(p.po));
-    // Sort by date ascending (oldest first)
-    const sorted=[...pos].sort((a,b)=>a.date.localeCompare(b.date));
+    const vQty=filtered.reduce((a,p)=>a+p.qty,0);
+    const vLines=filtered.reduce((a,p)=>a+p.lines,0);
+    const vPOs=new Set(filtered.map(p=>p.po));
+    totalQty+=vQty;totalLines+=vLines;filtered.forEach(p=>totalPOs.add(p.po));
+    const sorted=[...filtered].sort((a,b)=>a.date.localeCompare(b.date));
     const rows=sorted.map(p=>`<tr>
       <td>${p.po}</td>
       <td>${new Date(p.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
@@ -716,8 +724,9 @@ function renderOverduePanel(){
       </table>
     </div>`;
   });
-  document.getElementById('overdue-ph-meta').textContent=`${num(totalPOs.size)} POs · ${num(totalLines)} lines · ${num(totalQty)} units`;
-  document.getElementById('overdue-body').innerHTML=blocks||'<div style="color:var(--text-3);font-size:13px">No overdue POs</div>';
+  const note=excludePlaceholder?' · 26/12/2026 excluded':'';
+  document.getElementById('overdue-ph-meta').textContent=`${num(totalPOs.size)} POs · ${num(totalLines)} lines · ${num(totalQty)} units${note}`;
+  document.getElementById('overdue-body').innerHTML=blocks||'<div style="color:var(--text-3);font-size:13px;padding:4px 0">No overdue POs match the current filter.</div>';
 }
 
 // ── Week chart ────────────────────────────────────────────────────
