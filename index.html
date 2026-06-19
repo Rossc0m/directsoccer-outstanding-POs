@@ -40,7 +40,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
 .page{max-width:1200px;margin:0 auto;padding:24px 28px}
 
 /* Stats */
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:12px;margin-bottom:24px}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 18px}
 .stat-lbl{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px}
 .stat-val{font-size:22px;font-weight:600;letter-spacing:-0.02em}
@@ -49,6 +49,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
 .stat.overdue .stat-lbl{color:#9B3A35}
 .stat.overdue .stat-val{color:#C0392B}
 .stat.overdue .stat-cta{font-size:11px;color:#C0392B;margin-top:4px;display:flex;align-items:center;gap:3px}
+.stat.sla-breach{background:#FEF9EE;border-color:#F0D98C;cursor:pointer;transition:background .1s}
+.stat.sla-breach:hover{background:#FDF3D2}
+.stat.sla-breach .stat-lbl{color:#7A5800}
+.stat.sla-breach .stat-val{color:#854F0B}
+.stat.sla-breach .stat-cta{font-size:11px;color:#854F0B;margin-top:4px;display:flex;align-items:center;gap:3px}
 /* Overdue panel */
 .overdue-panel{background:var(--surface);border:1.5px solid #F5C4C1;border-radius:var(--r-xl);margin-bottom:24px;overflow:hidden;display:none}
 .overdue-panel.open{display:block}
@@ -67,6 +72,25 @@ table.ov-t td{padding:4px 8px;border-bottom:1px solid var(--border)}
 table.ov-t tr:last-child td{border-bottom:none}
 .ov-t .tr{text-align:right;font-variant-numeric:tabular-nums}
 .ov-t .overdue-days{color:#C0392B;font-weight:500}
+
+/* SLA breach panel */
+.sla-panel{background:var(--surface);border:1.5px solid #F0D98C;border-radius:var(--r-xl);margin-bottom:24px;overflow:hidden;display:none}
+.sla-panel.open{display:block}
+.sla-ph{background:#FEF9EE;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #F0D98C}
+.sla-ph-title{font-size:14px;font-weight:600;color:#854F0B;display:flex;align-items:center;gap:8px}
+.sla-ph-meta{font-size:12px;color:#7A5800}
+.sla-body{padding:20px 22px}
+.sla-vendor{margin-bottom:16px}
+.sla-vendor:last-child{margin-bottom:0}
+.sla-vendor-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sla-vendor-meta{font-size:11px;color:var(--text-3)}
+table.sla-t{width:100%;border-collapse:collapse;font-size:12px}
+table.sla-t th{text-align:left;color:var(--text-3);font-weight:500;padding:3px 8px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:0.03em}
+table.sla-t td{padding:4px 8px;border-bottom:1px solid var(--border)}
+table.sla-t tr:last-child td{border-bottom:none}
+.sla-t .tr{text-align:right;font-variant-numeric:tabular-nums}
+.sla-breach-days{font-weight:600;color:#854F0B}
+.sla-ok{color:var(--text-3)}
 
 /* Section */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:22px;margin-bottom:24px}
@@ -251,6 +275,15 @@ table.rp-rt input[type=number]:focus{outline:2px solid var(--accent);border-colo
     <div class="overdue-body" id="overdue-body"></div>
   </div>
 
+  <!-- SLA breach panel -->
+  <div class="sla-panel" id="sla-panel">
+    <div class="sla-ph">
+      <span class="sla-ph-title"><i class="ti ti-clock-exclamation"></i> Supplier SLA breaches</span>
+      <span class="sla-ph-meta" id="sla-ph-meta"></span>
+    </div>
+    <div class="sla-body" id="sla-body"></div>
+  </div>
+
   <!-- Weekly chart -->
   <div class="card">
     <div class="card-header">
@@ -372,12 +405,50 @@ const VC = {
 };
 function gvc(v){return VC[v]||{bg:'#F1EFE8',tx:'#5F5E5A',ch:'#5F5E5A'};}
 
-// ── Default embedded data [[date,vendor,po,qty,lines],...] ─────────
+// ── SLA lead times (business days) — Supplier Handbook ───────────
+const SLA_DAYS={
+  NIKE01:5,    // Nike: 5 days
+  SPOR25:5,    // Sport Foundry: 5 days
+  JOM94:10,    // Joma: 10 days
+  STAN03:5,    // Stanno: 5 days
+  MIT50:7,     // Mitre: 7 days
+  PRES06:1,    // Prestige: 1 day
+  UNEE05:1,    // Uneek: 1 day
+  PUMA21:15,   // Puma: 15 days
+  REYD22:3,    // Reydon: 3 days
+  TREN08:1,    // Trendsetting: 1 day
+  ELEM50:9,    // Errea: 9 days
+  UKST55:3,    // Umbro: 3 days
+  GUJRA1:130,  // Gujral: ~6 months (130 business days) — Asia containers
+  KOOL57:7,    // Kool: 7 days
+  ADPA44:10,   // Non-inventory sundries: 10 days
+  MTMK69:10,  // Non-inventory sundries: 10 days
+  MPSL25:10,   // Non-inventory sundries: 10 days
+};
+const SLA_NAMES={
+  NIKE01:'Nike',SPOR25:'Sport Foundry',JOM94:'Joma',STAN03:'Stanno',
+  MIT50:'Mitre',PRES06:'Prestige',UNEE05:'Uneek',PUMA21:'Puma',
+  REYD22:'Reydon',TREN08:'Trendsetting',ELEM50:'Errea',UKST55:'Umbro',
+  GUJRA1:'Gujral (Containers)',KOOL57:'Kool',
+  ADPA44:'Sundries',MTMK69:'Sundries',MPSL25:'Sundries',
+};
+
+function bizDaysBetween(d1,d2){
+  const start=new Date(d1+'T00:00:00');
+  const end=new Date(d2+'T00:00:00');
+  if(end<=start)return 0;
+  let count=0;
+  const cur=new Date(start);
+  cur.setDate(cur.getDate()+1);
+  while(cur<=end){const dow=cur.getDay();if(dow!==0&&dow!==6)count++;cur.setDate(cur.getDate()+1);}
+  return count;
+}
 const DEFAULT_RAW=[["2026-05-10","NIKE01","PO026175",42,4],["2026-05-10","NIKE01","PO026176",768,10],["2026-05-10","NIKE01","PO026181",9,7],["2026-05-18","ELEM50","PO028222",17,2],["2026-05-18","UKST55","PO028217",3,3],["2026-05-21","NIKE01","PO028168",22,2],["2026-05-22","NIKE01","PO026170",474,2],["2026-05-22","SPOR25","PO028186",1,1],["2026-05-29","NIKE01","PO026181",18,2],["2026-05-29","SPOR25","PO027990",1,1],["2026-05-29","SPOR25","PO028213",15,2],["2026-06-01","PUMA21","PO028057",311,36],["2026-06-01","SPOR25","PO027694",5,1],["2026-06-01","SPOR25","PO027706",2,2],["2026-06-01","SPOR25","PO027859",1,1],["2026-06-01","SPOR25","PO028043",4,1],["2026-06-03","ADPA44","PO028383",3000,1],["2026-06-03","SPOR25","PO028272",9,3],["2026-06-03","SPOR25","PO028273",134,10],["2026-06-03","SPOR25","PO028274",21,6],["2026-06-04","SPOR25","PO028111",1,1],["2026-06-05","MTMK69","PO028385",102,2],["2026-06-05","NIKE01","PO026168",42,4],["2026-06-05","SPOR25","PO028301",1,1],["2026-06-08","SPOR25","PO027465",1,1],["2026-06-08","SPOR25","PO027614",2,1],["2026-06-08","SPOR25","PO027627",8,2],["2026-06-08","SPOR25","PO027731",2,1],["2026-06-08","SPOR25","PO027737",1,1],["2026-06-08","SPOR25","PO027788",4,1],["2026-06-08","SPOR25","PO027810",4,2],["2026-06-08","SPOR25","PO027825",4,1],["2026-06-08","SPOR25","PO027838",1,1],["2026-06-08","SPOR25","PO027885",1,1],["2026-06-08","SPOR25","PO027952",6,1],["2026-06-08","SPOR25","PO027980",1,1],["2026-06-08","SPOR25","PO027997",5,1],["2026-06-08","SPOR25","PO028039",12,1],["2026-06-08","SPOR25","PO028040",5,1],["2026-06-08","SPOR25","PO028042",53,1],["2026-06-08","SPOR25","PO028084",13,1],["2026-06-08","SPOR25","PO028127",1,1],["2026-06-08","SPOR25","PO028169",10,2],["2026-06-08","SPOR25","PO028170",43,6],["2026-06-08","SPOR25","PO028213",4,1],["2026-06-08","SPOR25","PO028214",11,4],["2026-06-08","SPOR25","PO028215",82,9],["2026-06-08","SPOR25","PO028313",11,1],["2026-06-08","SPOR25","PO028316",2,1],["2026-06-08","SPOR25","PO028317",43,3],["2026-06-08","SPOR25","PO028318",60,6],["2026-06-08","STAN03","PO028342",1,1],["2026-06-09","MIT50","PO026546",40,1],["2026-06-09","MIT50","PO026564",48,1],["2026-06-09","NIKE01","PO028031",1,1],["2026-06-09","PRES06","PO028442",1,1],["2026-06-09","SPOR25","PO027700",2,1],["2026-06-09","SPOR25","PO028334",2,1],["2026-06-09","TREN08","PO028097",1,1],["2026-06-10","NIKE01","PO026182",1612,140],["2026-06-10","NIKE01","PO026183",1560,43],["2026-06-10","NIKE01","PO026184",1122,43],["2026-06-10","NIKE01","PO026185",114,9],["2026-06-10","NIKE01","PO026186",132,6],["2026-06-10","NIKE01","PO026187",4030,279],["2026-06-10","NIKE01","PO027899",85,3],["2026-06-10","NIKE01","PO028275",8,1],["2026-06-10","NIKE01","PO028375",7,1],["2026-06-10","PUMA21","PO028295",1,1],["2026-06-10","SPOR25","PO027764",1,1],["2026-06-10","SPOR25","PO027951",19,7],["2026-06-10","SPOR25","PO028341",2,1],["2026-06-10","SPOR25","PO028349",3,1],["2026-06-10","SPOR25","PO028351",272,22],["2026-06-10","SPOR25","PO028352",44,10],["2026-06-10","SPOR25","PO028353",459,26],["2026-06-10","SPOR25","PO028354",488,27],["2026-06-11","JOM94","PO028416",71,26],["2026-06-11","JOM94","PO028423",7,2],["2026-06-11","MIT50","PO027565",12,1],["2026-06-11","MPSL25","PO028510",2,2],["2026-06-11","SPOR25","PO028212",1,1],["2026-06-11","SPOR25","PO028214",1,1],["2026-06-11","SPOR25","PO028361",35,3],["2026-06-12","JOM94","PO028450",53,21],["2026-06-12","JOM94","PO028454",126,23],["2026-06-12","JOM94","PO028463",230,13],["2026-06-12","JOM94","PO028464",73,16],["2026-06-12","JOM94","PO028465",132,15],["2026-06-12","JOM94","PO028466",158,6],["2026-06-12","JOM94","PO028467",80,2],["2026-06-12","MIT50","PO026578",660,1],["2026-06-12","MIT50","PO026607",48,1],["2026-06-12","MIT50","PO027464",630,1],["2026-06-12","NIKE01","PO026168",42,6],["2026-06-12","NIKE01","PO026177",270,1],["2026-06-12","NIKE01","PO028375",1,1],["2026-06-12","NIKE01","PO028397",12,3],["2026-06-12","NIKE01","PO028408",33,3],["2026-06-12","SPOR25","PO027687",6,1],["2026-06-12","SPOR25","PO027769",35,1],["2026-06-12","SPOR25","PO028245",1,1],["2026-06-12","SPOR25","PO028376",249,22],["2026-06-12","SPOR25","PO028377",62,30],["2026-06-12","SPOR25","PO028379",7,3],["2026-06-14","SPOR25","PO028109",41,4],["2026-06-14","SPOR25","PO028110",10,1],["2026-06-14","SPOR25","PO028111",36,6],["2026-06-14","SPOR25","PO028112",6,1],["2026-06-14","SPOR25","PO028113",29,2],["2026-06-15","JOM94","PO028115",4,1],["2026-06-15","JOM94","PO028480",112,28],["2026-06-15","JOM94","PO028485",57,19],["2026-06-15","JOM94","PO028487",79,24],["2026-06-15","JOM94","PO028490",24,1],["2026-06-15","JOM94","PO028492",70,3],["2026-06-15","NIKE01","PO027818",50,5],["2026-06-15","NIKE01","PO028045",25,1],["2026-06-15","NIKE01","PO028184",53,2],["2026-06-15","NIKE01","PO028417",23,11],["2026-06-15","PUMA21","PO028208",23,23],["2026-06-15","PUMA21","PO028419",17,14],["2026-06-15","PUMA21","PO028441",44,7],["2026-06-15","REYD22","PO027101",60,1],["2026-06-15","REYD22","PO028493",30,1],["2026-06-15","REYD22","PO028494",72,1],["2026-06-15","SPOR25","PO027591",2,1],["2026-06-15","SPOR25","PO027636",2,1],["2026-06-15","SPOR25","PO027849",2,1],["2026-06-15","SPOR25","PO027859",1,1],["2026-06-15","SPOR25","PO027868",1,1],["2026-06-15","SPOR25","PO027894",4,2],["2026-06-15","SPOR25","PO027901",7,1],["2026-06-15","SPOR25","PO027915",17,2],["2026-06-15","SPOR25","PO027931",1,1],["2026-06-15","SPOR25","PO027950",18,2],["2026-06-15","SPOR25","PO027952",25,4],["2026-06-15","SPOR25","PO027985",3,1],["2026-06-15","SPOR25","PO027996",11,3],["2026-06-15","SPOR25","PO027997",10,3],["2026-06-15","SPOR25","PO027998",39,4],["2026-06-15","SPOR25","PO028039",18,3],["2026-06-15","SPOR25","PO028040",1,1],["2026-06-15","SPOR25","PO028041",22,4],["2026-06-15","SPOR25","PO028042",26,2],["2026-06-15","SPOR25","PO028043",27,4],["2026-06-15","SPOR25","PO028112",26,3],["2026-06-15","SPOR25","PO028171",75,6],["2026-06-15","SPOR25","PO028209",11,1],["2026-06-15","SPOR25","PO028389",34,27],["2026-06-15","SPOR25","PO028392",50,27],["2026-06-16","JOM94","PO028505",100,35],["2026-06-16","MIT50","PO026555",20,1],["2026-06-16","MIT50","PO027459",240,1],["2026-06-16","NIKE01","PO028451",8,3],["2026-06-16","NIKE01","PO028462",180,16],["2026-06-16","PUMA21","PO028452",38,13],["2026-06-16","SPOR25","PO028272",40,1],["2026-06-16","SPOR25","PO028398",36,27],["2026-06-16","SPOR25","PO028401",96,23],["2026-06-16","SPOR25","PO028403",111,3],["2026-06-16","SPOR25","PO028404",69,4],["2026-06-16","SPOR25","PO028405",130,10],["2026-06-16","STAN03","PO028468",110,1],["2026-06-16","STAN03","PO028469",100,1],["2026-06-16","STAN03","PO028470",100,1],["2026-06-16","STAN03","PO028471",168,20],["2026-06-16","STAN03","PO028472",189,17],["2026-06-17","NIKE01","PO026181",18,2],["2026-06-17","NIKE01","PO028481",73,28],["2026-06-17","PUMA21","PO028482",35,15],["2026-06-17","SPOR25","PO027614",1,1],["2026-06-17","SPOR25","PO027737",1,1],["2026-06-17","SPOR25","PO027810",1,1],["2026-06-17","SPOR25","PO028169",2,1],["2026-06-17","SPOR25","PO028420",66,29],["2026-06-17","SPOR25","PO028424",142,31],["2026-06-17","SPOR25","PO028425",105,31],["2026-06-17","SPOR25","PO028426",82,35],["2026-06-17","SPOR25","PO028427",343,16],["2026-06-17","SPOR25","PO028429",209,14],["2026-06-17","SPOR25","PO028430",100,1],["2026-06-17","SPOR25","PO028431",100,1],["2026-06-17","SPOR25","PO028432",100,1],["2026-06-17","SPOR25","PO028434",100,1],["2026-06-17","SPOR25","PO028435",1,1],["2026-06-17","SPOR25","PO028436",126,11],["2026-06-17","SPOR25","PO028437",214,5],["2026-06-17","SPOR25","PO028438",108,7],["2026-06-17","SPOR25","PO028439",155,6],["2026-06-17","SPOR25","PO028440",45,4],["2026-06-17","SPOR25","PO028443",311,11],["2026-06-17","SPOR25","PO028444",68,9],["2026-06-17","SPOR25","PO028445",92,9],["2026-06-17","SPOR25","PO028446",133,8],["2026-06-17","SPOR25","PO028447",80,6],["2026-06-17","SPOR25","PO028448",244,13],["2026-06-17","STAN03","PO028484",61,18],["2026-06-18","NIKE01","PO028369",2,1],["2026-06-18","NIKE01","PO028375",1,1],["2026-06-18","NIKE01","PO028387",3,1],["2026-06-18","NIKE01","PO028506",23,18],["2026-06-18","SPOR25","PO027761",7,1],["2026-06-18","SPOR25","PO028449",330,10],["2026-06-18","SPOR25","PO028453",75,33],["2026-06-18","SPOR25","PO028455",71,31],["2026-06-18","SPOR25","PO028456",120,4],["2026-06-18","SPOR25","PO028457",145,7],["2026-06-18","SPOR25","PO028458",42,6],["2026-06-18","SPOR25","PO028459",188,10],["2026-06-18","SPOR25","PO028460",155,3],["2026-06-18","SPOR25","PO028461",90,3],["2026-06-18","SPOR25","PO028473",10,1],["2026-06-18","SPOR25","PO028476",5,1],["2026-06-18","TREN08","PO028390",100,1],["2026-06-19","MIT50","PO026548",48,1],["2026-06-19","MIT50","PO026553",260,1],["2026-06-19","MIT50","PO026565",96,1],["2026-06-19","MIT50","PO026579",756,1],["2026-06-19","MIT50","PO026580",360,1],["2026-06-19","MIT50","PO026584",1972,2],["2026-06-19","MIT50","PO026607",36,1],["2026-06-19","NIKE01","PO028031",1,1],["2026-06-19","SPOR25","PO028252",1,1],["2026-06-19","SPOR25","PO028483",70,30],["2026-06-19","SPOR25","PO028486",65,20],["2026-06-19","SPOR25","PO028488",120,4],["2026-06-19","SPOR25","PO028495",40,1],["2026-06-19","SPOR25","PO028496",158,6],["2026-06-19","SPOR25","PO028497",192,5],["2026-06-19","SPOR25","PO028498",72,6],["2026-06-19","SPOR25","PO028499",30,4],["2026-06-19","SPOR25","PO028502",100,1],["2026-06-19","SPOR25","PO028503",40,1],["2026-06-19","SPOR25","PO028504",65,5],["2026-06-22","NIKE01","PO028275",3,1],["2026-06-22","SPOR25","PO027706",1,1],["2026-06-22","SPOR25","PO028039",17,2],["2026-06-22","SPOR25","PO028212",1,1],["2026-06-22","SPOR25","PO028507",141,25],["2026-06-22","SPOR25","PO028508",82,27],["2026-06-22","SPOR25","PO028509",85,3],["2026-06-23","MIT50","PO026548",60,1],["2026-06-23","MIT50","PO026550",48,1],["2026-06-23","MIT50","PO026573",540,1],["2026-06-23","MIT50","PO026574",828,1],["2026-06-23","MIT50","PO026581",660,1],["2026-06-23","MIT50","PO026586",1440,1],["2026-06-23","MIT50","PO026599",630,1],["2026-06-23","MIT50","PO026601",936,1],["2026-06-23","NIKE01","PO024535",40,1],["2026-06-23","NIKE01","PO028387",1,1],["2026-06-23","SPOR25","PO028292",4,2],["2026-06-23","UNEE05","PO028344",5,2],["2026-06-24","NIKE01","PO027994",9,1],["2026-06-24","NIKE01","PO028176",26,1],["2026-06-24","NIKE01","PO028184",15,2],["2026-06-24","UNEE05","PO028399",3,1],["2026-06-25","MIT50","PO026555",180,1],["2026-06-25","MIT50","PO027463",900,1],["2026-06-25","NIKE01","PO028031",3,1],["2026-06-25","NIKE01","PO028369",4,1],["2026-06-25","NIKE01","PO028387",1,1],["2026-06-25","NIKE01","PO028451",9,1],["2026-06-25","NIKE01","PO028478",3,1],["2026-06-25","NIKE01","PO028481",1,1],["2026-06-26","JOM94","PO028374",1,1],["2026-06-26","NIKE01","PO027984",1,1],["2026-06-26","NIKE01","PO027994",11,1],["2026-06-26","NIKE01","PO028203",48,1],["2026-06-26","NIKE01","PO028324",6,2],["2026-06-26","NIKE01","PO028397",721,2],["2026-06-26","TREN08","PO028246",2,1],["2026-06-29","NIKE01","PO027948",50,5],["2026-06-29","NIKE01","PO027973",50,5],["2026-06-29","NIKE01","PO027994",2,1],["2026-06-29","NIKE01","PO028203",48,1],["2026-06-29","NIKE01","PO028275",3,1],["2026-06-29","NIKE01","PO028481",6,1],["2026-06-29","SPOR25","PO028273",15,1],["2026-06-30","JOM94","PO028309",107,6],["2026-06-30","JOM94","PO028367",8,2],["2026-06-30","MIT50","PO026546",12,1],["2026-06-30","MIT50","PO026557",640,1],["2026-06-30","MIT50","PO026563",860,1],["2026-06-30","MIT50","PO026570",756,1],["2026-06-30","MIT50","PO026571",1080,1],["2026-06-30","MIT50","PO026572",810,1],["2026-06-30","MIT50","PO026600",720,1],["2026-06-30","MIT50","PO026602",810,2],["2026-06-30","MIT50","PO027459",240,1],["2026-06-30","NIKE01","PO028184",30,2],["2026-07-01","KOOL57","PO027078",792,2],["2026-07-01","NIKE01","PO028023",1,1],["2026-07-01","NIKE01","PO028359",13,3],["2026-07-01","NIKE01","PO028375",3,2],["2026-07-01","NIKE01","PO028478",30,3],["2026-07-01","NIKE01","PO028481",1,1],["2026-07-02","JOM94","PO028490",12,1],["2026-07-02","NIKE01","PO028045",8,1],["2026-07-02","NIKE01","PO028114",8,1],["2026-07-02","TREN08","PO028261",1,1],["2026-07-02","UNEE05","PO027480",10,1],["2026-07-03","JOM94","PO028423",18,1],["2026-07-03","NIKE01","PO028168",1,1],["2026-07-03","NIKE01","PO028176",7,1],["2026-07-03","NIKE01","PO028223",2,1],["2026-07-03","NIKE01","PO028462",40,1],["2026-07-03","SPOR25","PO028041",2,1],["2026-07-04","NIKE01","PO027899",44,1],["2026-07-06","JOM94","PO028224",1,1],["2026-07-06","JOM94","PO028338",1,1],["2026-07-06","NIKE01","PO027852",10,1],["2026-07-06","NIKE01","PO028007",50,5],["2026-07-06","NIKE01","PO028031",1,1],["2026-07-06","NIKE01","PO028045",2,1],["2026-07-06","NIKE01","PO028168",4,1],["2026-07-06","PUMA21","PO028237",4,1],["2026-07-06","SPOR25","PO027831",1,1],["2026-07-07","JOM94","PO028371",8,1],["2026-07-07","JOM94","PO028450",20,6],["2026-07-07","JOM94","PO028454",1,1],["2026-07-07","NIKE01","PO028045",23,3],["2026-07-07","NIKE01","PO028118",4,1],["2026-07-07","NIKE01","PO028184",33,1],["2026-07-07","NIKE01","PO028263",6,1],["2026-07-07","NIKE01","PO028275",50,3],["2026-07-09","NIKE01","PO028369",5,1],["2026-07-09","NIKE01","PO028397",720,1],["2026-07-09","SPOR25","PO028040",9,1],["2026-07-10","JOM94","PO028416",1,1],["2026-07-10","JOM94","PO028422",12,1],["2026-07-10","JOM94","PO028423",1,1],["2026-07-10","NIKE01","PO026913",2418,160],["2026-07-10","NIKE01","PO026914",2076,92],["2026-07-10","NIKE01","PO026915",1590,38],["2026-07-10","NIKE01","PO026916",860,50],["2026-07-10","NIKE01","PO026918",2496,15],["2026-07-10","NIKE01","PO026919",3618,296],["2026-07-10","NIKE01","PO026920",2970,173],["2026-07-10","NIKE01","PO026921",1896,64],["2026-07-10","NIKE01","PO028118",1,1],["2026-07-10","NIKE01","PO028168",20,1],["2026-07-10","NIKE01","PO028417",1,1],["2026-07-10","NIKE01","PO028489",190,5],["2026-07-10","PUMA21","PO027470",5,2],["2026-07-13","JOM94","PO028267",5,2],["2026-07-13","NIKE01","PO028168",11,1],["2026-07-13","NIKE01","PO028182",30,1],["2026-07-13","SPOR25","PO027834",3,3],["2026-07-13","SPOR25","PO028154",10,1],["2026-07-13","SPOR25","PO028170",32,2],["2026-07-13","SPOR25","PO028212",3,1],["2026-07-13","SPOR25","PO028213",121,1],["2026-07-13","SPOR25","PO028214",55,3],["2026-07-13","SPOR25","PO028272",30,3],["2026-07-13","SPOR25","PO028273",18,1],["2026-07-13","SPOR25","PO028352",94,2],["2026-07-13","SPOR25","PO028353",64,2],["2026-07-14","JOM94","PO027995",1,1],["2026-07-14","JOM94","PO028167",2,1],["2026-07-14","JOM94","PO028206",8,1],["2026-07-14","SPOR25","PO028273",40,2],["2026-07-15","NIKE01","PO028406",20,1],["2026-07-15","NIKE01","PO028479",48,1],["2026-07-15","UNEE05","PO028262",1,1],["2026-07-16","JOM94","PO028491",40,1],["2026-07-16","NIKE01","PO028481",1,1],["2026-07-16","SPOR25","PO027951",20,2],["2026-07-17","JOM94","PO028167",12,1],["2026-07-17","JOM94","PO028293",4,1],["2026-07-17","JOM94","PO028480",1,1],["2026-07-17","NIKE01","PO028045",7,1],["2026-07-17","NIKE01","PO028185",189,4],["2026-07-17","SPOR25","PO028252",5,1],["2026-07-20","JOM94","PO028224",4,1],["2026-07-20","JOM94","PO028270",16,1],["2026-07-20","NIKE01","PO028203",10,1],["2026-07-20","NIKE01","PO028223",1,1],["2026-07-20","NIKE01","PO028275",12,1],["2026-07-20","NIKE01","PO028397",150,9],["2026-07-20","SPOR25","PO027486",17,1],["2026-07-20","SPOR25","PO027560",3,1],["2026-07-20","SPOR25","PO027683",1,1],["2026-07-20","SPOR25","PO027761",3,1],["2026-07-20","SPOR25","PO027794",1,1],["2026-07-20","SPOR25","PO027871",1,1],["2026-07-20","SPOR25","PO027889",4,1],["2026-07-20","SPOR25","PO027953",6,1],["2026-07-20","SPOR25","PO028110",12,1],["2026-07-20","SPOR25","PO028170",7,1],["2026-07-20","SPOR25","PO028215",19,1],["2026-07-20","SPOR25","PO028242",1,1],["2026-07-20","SPOR25","PO028254",220,4],["2026-07-20","SPOR25","PO028273",25,1],["2026-07-21","JOM94","PO028140",2,1],["2026-07-21","JOM94","PO028276",4,1],["2026-07-21","JOM94","PO028454",20,4],["2026-07-21","NIKE01","PO028114",10,1],["2026-07-21","NIKE01","PO028168",23,2],["2026-07-21","NIKE01","PO028176",270,5],["2026-07-21","NIKE01","PO028182",140,6],["2026-07-21","NIKE01","PO028184",60,4],["2026-07-22","JOM94","PO028225",16,1],["2026-07-22","JOM94","PO028501",20,2],["2026-07-22","NIKE01","PO028201",1,1],["2026-07-22","NIKE01","PO028275",1,1],["2026-07-23","NIKE01","PO028045",2,1],["2026-07-23","NIKE01","PO028114",4,1],["2026-07-23","NIKE01","PO028168",3,1],["2026-07-23","NIKE01","PO028223",14,2],["2026-07-23","SPOR25","PO028271",2,1],["2026-07-24","JOM94","PO028282",3,2],["2026-07-24","JOM94","PO028423",4,1],["2026-07-24","NIKE01","PO028417",3,1],["2026-07-24","NIKE01","PO028481",1,1],["2026-07-27","JOM94","PO027531",2,2],["2026-07-27","NIKE01","PO028031",1,1],["2026-07-27","NIKE01","PO028045",2,1],["2026-07-27","SPOR25","PO028169",13,2],["2026-07-27","SPOR25","PO028194",14,1],["2026-07-27","SPOR25","PO028213",20,2],["2026-07-27","SPOR25","PO028272",17,2],["2026-07-27","SPOR25","PO028273",3,1],["2026-07-27","SPOR25","PO028296",1,1],["2026-07-27","SPOR25","PO028349",2,2],["2026-07-28","JOM94","PO028167",5,1],["2026-07-28","NIKE01","PO028275",6,1],["2026-07-28","NIKE01","PO028325",40,1],["2026-07-29","NIKE01","PO028223",2,1],["2026-07-29","PUMA21","PO027699",1,1],["2026-07-29","PUMA21","PO027743",7,2],["2026-07-30","JOM94","PO028490",108,1],["2026-07-30","MIT50","PO026551",191,1],["2026-07-30","NIKE01","PO028290",1302,2],["2026-07-30","SPOR25","PO028037",1,1],["2026-07-30","SPOR25","PO028076",17,3],["2026-07-31","JOM94","PO028116",5,1],["2026-07-31","JOM94","PO028386",2,1],["2026-07-31","JOM94","PO028422",1,1],["2026-07-31","JOM94","PO028480",1,1],["2026-07-31","NIKE01","PO028045",8,1],["2026-07-31","NIKE01","PO028114",10,1],["2026-07-31","NIKE01","PO028176",48,3],["2026-07-31","NIKE01","PO028275",35,1],["2026-07-31","NIKE01","PO028375",18,2],["2026-07-31","NIKE01","PO028478",183,5],["2026-08-01","KOOL57","PO027078",384,1],["2026-08-03","JOM94","PO028464",4,1],["2026-08-03","NIKE01","PO028031",1,1],["2026-08-03","NIKE01","PO028275",8,1],["2026-08-03","NIKE01","PO028290",402,1],["2026-08-03","PUMA21","PO028058",629,88],["2026-08-03","SPOR25","PO027663",6,1],["2026-08-03","SPOR25","PO027952",31,1],["2026-08-03","SPOR25","PO028042",28,1],["2026-08-03","SPOR25","PO028169",60,1],["2026-08-03","SPOR25","PO028272",106,2],["2026-08-03","SPOR25","PO028351",1,1],["2026-08-04","JOM94","PO028243",4,1],["2026-08-04","JOM94","PO028372",28,3],["2026-08-04","NIKE01","PO028275",55,2],["2026-08-05","NIKE01","PO028275",2,1],["2026-08-05","NIKE01","PO028290",1002,1],["2026-08-07","PUMA21","PO027542",1,1],["2026-08-10","NIKE01","PO026917",270,23],["2026-08-10","NIKE01","PO026922",1878,142],["2026-08-10","NIKE01","PO026923",1532,60],["2026-08-10","NIKE01","PO026924",2166,36],["2026-08-10","NIKE01","PO026925",738,37],["2026-08-10","NIKE01","PO026926",246,21],["2026-08-10","NIKE01","PO026927",2496,15],["2026-08-10","NIKE01","PO026928",2922,216],["2026-08-10","NIKE01","PO026929",2964,172],["2026-08-10","NIKE01","PO026930",1896,64],["2026-08-10","NIKE01","PO028114",2,1],["2026-08-10","NIKE01","PO028168",12,1],["2026-08-10","NIKE01","PO028176",292,5],["2026-08-10","NIKE01","PO028275",10,1],["2026-08-10","NIKE01","PO028290",2004,2],["2026-08-10","NIKE01","PO028406",10,1],["2026-08-10","NIKE01","PO028408",39,1],["2026-08-10","SPOR25","PO028039",90,1],["2026-08-10","SPOR25","PO028085",8,1],["2026-08-10","SPOR25","PO028169",29,2],["2026-08-10","SPOR25","PO028212",1,1],["2026-08-10","SPOR25","PO028213",21,1],["2026-08-10","SPOR25","PO028272",33,1],["2026-08-10","SPOR25","PO028273",73,2],["2026-08-10","SPOR25","PO028351",2,1],["2026-08-10","SPOR25","PO028352",15,2],["2026-08-10","SPOR25","PO028353",46,2],["2026-08-11","JOM94","PO028255",1,1],["2026-08-11","JOM94","PO028276",3,2],["2026-08-11","NIKE01","PO028369",13,1],["2026-08-11","NIKE01","PO028411",20,1],["2026-08-13","NIKE01","PO028182",168,6],["2026-08-14","NIKE01","PO028176",20,1],["2026-08-14","NIKE01","PO028462",20,1],["2026-08-17","SPOR25","PO027543",2,1],["2026-08-17","SPOR25","PO028039",8,1],["2026-08-17","SPOR25","PO028109",10,1],["2026-08-18","NIKE01","PO028417",1,1],["2026-09-01","JOM94","PO027865",1,1],["2026-09-01","JOM94","PO028149",19288,538],["2026-09-01","KOOL57","PO027078",408,3],["2026-09-08","JOM94","PO028276",2,1],["2026-09-10","NIKE01","PO026931",838,75],["2026-09-10","NIKE01","PO026932",432,31],["2026-09-10","NIKE01","PO026933",1416,27],["2026-09-10","NIKE01","PO026934",282,12],["2026-09-10","NIKE01","PO026935",222,22],["2026-09-10","NIKE01","PO026936",2496,15],["2026-09-10","NIKE01","PO026937",3618,296],["2026-09-10","NIKE01","PO026938",2964,172],["2026-09-10","NIKE01","PO026939",1896,64],["2026-09-14","SPOR25","PO028352",34,1],["2026-09-15","JOM94","PO028293",6,1],["2026-10-01","KOOL57","PO027078",96,2],["2026-10-10","NIKE01","PO027747",864,33],["2026-10-10","NIKE01","PO027748",1542,24],["2026-10-10","NIKE01","PO027749",6360,16],["2026-10-10","NIKE01","PO027750",84,6],["2026-10-10","NIKE01","PO027751",576,13],["2026-10-10","NIKE01","PO027753",11076,160],["2026-10-10","NIKE01","PO027754",6258,111],["2026-11-01","KOOL57","PO027078",24,1],["2026-12-25","SPOR25","PO028104",1,1],["2026-12-25","SPOR25","PO028271",1,1],["2026-12-25","SPOR25","PO028425",1,1],["2026-12-25","SPOR25","PO028453",2,1],["2026-12-25","TREN08","PO028343",3,3],["2026-12-25","TREN08","PO028390",1,1],["2026-12-25","TREN08","PO028414",1600,2],["2026-12-26","MIT50","PO026546",31,1],["2026-12-26","MIT50","PO026547",48,1],["2026-12-26","MIT50","PO026548",348,1],["2026-12-26","MIT50","PO026550",96,1],["2026-12-26","MIT50","PO026551",152,1],["2026-12-26","MIT50","PO026552",560,1],["2026-12-26","MIT50","PO026553",880,1],["2026-12-26","MIT50","PO026554",120,1],["2026-12-26","MIT50","PO026555",720,1],["2026-12-26","MIT50","PO026556",1460,1],["2026-12-26","MIT50","PO026557",1400,1],["2026-12-26","MIT50","PO026558",100,1],["2026-12-26","MIT50","PO026559",500,1],["2026-12-26","MIT50","PO026560",60,1],["2026-12-26","MIT50","PO026561",120,1],["2026-12-26","MIT50","PO026562",588,1],["2026-12-26","MIT50","PO026563",1512,1],["2026-12-26","MIT50","PO026564",192,1],["2026-12-26","MIT50","PO026565",192,1],["2026-12-26","MIT50","PO026566",284,1],["2026-12-26","MIT50","PO026570",144,1],["2026-12-26","MIT50","PO026571",2016,1],["2026-12-26","MIT50","PO026572",1818,1],["2026-12-26","MIT50","PO026573",1476,1],["2026-12-26","MIT50","PO026574",1368,1],["2026-12-26","MIT50","PO026575",1350,1],["2026-12-26","MIT50","PO026576",1365,1],["2026-12-26","MIT50","PO026577",1944,1],["2026-12-26","MIT50","PO026578",1306,1],["2026-12-26","MIT50","PO026579",540,1],["2026-12-26","MIT50","PO026580",612,1],["2026-12-26","MIT50","PO026581",516,1],["2026-12-26","MIT50","PO026582",2376,1],["2026-12-26","MIT50","PO026583",2824,1],["2026-12-26","MIT50","PO026584",2978,1],["2026-12-26","MIT50","PO026585",2448,1],["2026-12-26","MIT50","PO026586",36,1],["2026-12-26","MIT50","PO026590",1410,1],["2026-12-26","MIT50","PO026595",1890,1],["2026-12-26","MIT50","PO026597",840,1],["2026-12-26","MIT50","PO026599",390,1],["2026-12-26","MIT50","PO026600",7272,1],["2026-12-26","MIT50","PO026601",9036,1],["2026-12-26","MIT50","PO026602",6258,1],["2026-12-26","MIT50","PO026607",12,1],["2026-12-26","MIT50","PO027459",3810,1],["2026-12-26","MIT50","PO027460",6270,1],["2026-12-26","MIT50","PO027462",4170,1],["2026-12-26","MIT50","PO027463",6270,1],["2026-12-26","MIT50","PO027464",7080,1],["2026-12-26","MIT50","PO027585",7290,1],["2026-12-26","REYD22","PO023312",198,3],["2026-12-26","REYD22","PO023313",120,1],["2026-12-26","REYD22","PO023314",288,3],["2026-12-26","REYD22","PO027101",810,1],["2026-12-26","REYD22","PO027102",1020,1],["2026-12-26","REYD22","PO027104",840,1],["2026-12-26","REYD22","PO027106",616,1],["2026-12-26","WMWA90","PO026648",4000,1],["2026-12-28","REYD22","PO027105",1170,1],["2027-02-16","GUJRA1","PO028475",17441,27]];
 
 // ── State ─────────────────────────────────────────────────────────
 let byDate = {};    // {dateStr: {vendor: [{po,qty,lines}]}}
 let reservedItems = []; // [{vendor,po,itemNo,desc,date,outQty,resQty,isSpecialOrder,salesOrderNo,overdue,daysOver}]
+let slaBreaches = []; // [{vendor,po,orderDate,expectedDate,slaLead,actualDays,breachDays}]
 let resMode = 'vendor';   // 'vendor' | 'customer'
 let resFilter = 'all';    // 'all' | 'overdue' | 'special'
 let resOpenGroups = new Set();
@@ -457,6 +528,31 @@ function loadFromExcelRows(rows){
     const daysOver=overdue?Math.round((TODAY-new Date(dateStr+'T00:00:00'))/(1000*60*60*24)):0;
     reservedItems.push({vendor,po,itemNo,desc,date:dateStr,outQty:Math.round(outQty),resQty:Math.round(resQty),isSpecialOrder,salesOrderNo,overdue,daysOver});
   });
+  // ── Calculate SLA breaches ──────────────────────────────────────
+  const slaTmp={};
+  rows.forEach(row=>{
+    const vendor=String(row['Buy-from Vendor No.']||'').trim();
+    const po=String(row['Document No.']||'').trim();
+    const outQty=parseFloat(row['Outstanding Quantity']||0);
+    if(!vendor||!po||outQty<=0||!SLA_DAYS[vendor])return;
+    let orderDateRaw=row['Purchase Order Date'];
+    let expectedDateRaw=row['Expected Receipt Date'];
+    if(!orderDateRaw||!expectedDateRaw)return;
+    let orderDateStr,expectedDateStr;
+    if(orderDateRaw instanceof Date)orderDateStr=fmtDate(orderDateRaw);
+    else orderDateStr=String(orderDateRaw).replace(/T.*/,'').substring(0,10);
+    if(expectedDateRaw instanceof Date)expectedDateStr=fmtDate(expectedDateRaw);
+    else expectedDateStr=String(expectedDateRaw).replace(/T.*/,'').substring(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(orderDateStr)||!/^\d{4}-\d{2}-\d{2}$/.test(expectedDateStr))return;
+    const key=`${vendor}||${po}||${expectedDateStr}`;
+    if(!slaTmp[key]){
+      const slaLead=SLA_DAYS[vendor];
+      const actualDays=bizDaysBetween(orderDateStr,expectedDateStr);
+      const breachDays=Math.max(0,actualDays-slaLead);
+      slaTmp[key]={vendor,po,orderDate:orderDateStr,expectedDate:expectedDateStr,slaLead,actualDays,breachDays};
+    }
+  });
+  slaBreaches=Object.values(slaTmp).filter(s=>s.breachDays>0).sort((a,b)=>b.breachDays-a.breachDays);
 }
 
 // ── File upload ───────────────────────────────────────────────────
@@ -513,14 +609,69 @@ function renderStats(){
         <div class="stat-cta"><i class="ti ti-chevron-down" id="overdue-chevron"></i>${num(ovLines)} lines · ${num(ovQty)} units</div>
       </div>`
     : `<div class="stat"><div class="stat-lbl">Overdue POs</div><div class="stat-val" style="color:var(--text-3)">None</div></div>`;
+  const slaCard=slaBreaches.length>0
+    ?`<div class="stat sla-breach" onclick="toggleSla()" id="sla-stat" role="button">
+        <div class="stat-lbl">SLA breaches</div>
+        <div class="stat-val">${num(slaBreaches.length)}</div>
+        <div class="stat-cta"><i class="ti ti-chevron-down" id="sla-chevron"></i>Worst: +${slaBreaches[0].breachDays}d over (${slaBreaches[0].vendor})</div>
+      </div>`
+    :`<div class="stat"><div class="stat-lbl">SLA breaches</div><div class="stat-val" style="color:var(--text-3)">${slaBreaches.length===0&&reservedItems.length===0?'—':'None'}</div></div>`;
   document.getElementById('stats-row').innerHTML=`
     <div class="stat"><div class="stat-lbl">Total units outstanding</div><div class="stat-val">${num(totalQty)}</div></div>
     <div class="stat"><div class="stat-lbl">Total PO lines</div><div class="stat-val">${num(totalLines)}</div></div>
     <div class="stat"><div class="stat-lbl">Open purchase orders</div><div class="stat-val">${num(totalPOs.size)}</div></div>
-    ${ovCard}`;
+    ${ovCard}
+    ${slaCard}`;
   overdueOpen=false;
+  slaOpen=false;
   const op=document.getElementById('overdue-panel');
   if(op)op.classList.remove('open');
+  const sp=document.getElementById('sla-panel');
+  if(sp)sp.classList.remove('open');
+}
+
+let slaOpen=false;
+function toggleSla(){
+  slaOpen=!slaOpen;
+  document.getElementById('sla-panel').classList.toggle('open',slaOpen);
+  const ch=document.getElementById('sla-chevron');
+  if(ch)ch.style.transform=slaOpen?'rotate(180deg)':'';
+  if(slaOpen)renderSlaPanel();
+}
+
+function renderSlaPanel(){
+  const groups={};
+  slaBreaches.forEach(s=>{
+    if(!groups[s.vendor])groups[s.vendor]=[];
+    groups[s.vendor].push(s);
+  });
+  let totalPOs=slaBreaches.length;
+  let maxBreach=slaBreaches.length?slaBreaches[0].breachDays:0;
+  document.getElementById('sla-ph-meta').textContent=`${num(totalPOs)} PO${totalPOs>1?'s':''} in breach · worst: +${maxBreach}d`;
+  let blocks='';
+  Object.entries(groups).sort((a,b)=>Math.max(...b[1].map(x=>x.breachDays))-Math.max(...a[1].map(x=>x.breachDays))).forEach(([v,items])=>{
+    const c=gvc(v);
+    const slaName=SLA_NAMES[v]||v;
+    const rows=items.map(s=>`<tr>
+      <td>${s.po}</td>
+      <td style="color:var(--text-3)">${new Date(s.orderDate+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
+      <td>${new Date(s.expectedDate+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
+      <td class="tr">${s.slaLead}d</td>
+      <td class="tr">${s.actualDays}d</td>
+      <td class="tr sla-breach-days">+${s.breachDays}d</td>
+    </tr>`).join('');
+    blocks+=`<div class="sla-vendor">
+      <div class="sla-vendor-hdr">
+        <span class="vs-badge" style="background:${c.bg};color:${c.tx}">${v}</span>
+        <span class="sla-vendor-meta">${slaName} · SLA: ${SLA_DAYS[v]}d · ${items.length} PO${items.length>1?'s':''} in breach</span>
+      </div>
+      <table class="sla-t">
+        <thead><tr><th>PO number</th><th>Order date</th><th>Expected date</th><th style="text-align:right">SLA</th><th style="text-align:right">Actual</th><th style="text-align:right">Over SLA</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  });
+  document.getElementById('sla-body').innerHTML=blocks||'<div style="color:var(--text-3);font-size:13px">No breaches found.</div>';
 }
 
 let overdueOpen=false;
