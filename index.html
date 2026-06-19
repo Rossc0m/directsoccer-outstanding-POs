@@ -621,7 +621,10 @@ function renderStats(){
         <div class="stat-val">${num(slaBreaches.length)}</div>
         <div class="stat-cta"><i class="ti ti-chevron-down" id="sla-chevron"></i>Worst: +${slaBreaches[0].breachDays}d over (${slaBreaches[0].vendor})</div>
       </div>`
-    :`<div class="stat"><div class="stat-lbl">SLA breaches</div><div class="stat-val" style="color:var(--text-3)">${slaBreaches.length===0&&reservedItems.length===0?'—':'None'}</div></div>`;
+    :`<div class="stat" style="border-style:dashed">
+        <div class="stat-lbl">SLA breaches</div>
+        <div class="stat-val" style="color:var(--text-3);font-size:14px;font-weight:500;margin-top:4px">${byDate&&Object.keys(byDate).length>0?'None ✓':'Upload data to check'}</div>
+      </div>`;
   document.getElementById('stats-row').innerHTML=`
     <div class="stat"><div class="stat-lbl">Total units outstanding</div><div class="stat-val">${num(totalQty)}</div></div>
     <div class="stat"><div class="stat-lbl">Total PO lines</div><div class="stat-val">${num(totalLines)}</div></div>
